@@ -353,9 +353,31 @@
   .dash-month-row .dmr-vals b{ color:var(--text); font-weight:700; }
   .dash-month-row .dmr-saldo{ font-weight:700; font-size:14px; white-space:nowrap; }
   @media (max-width:600px){ .dash-month-row{ flex-wrap:wrap; } .dash-month-row .dmr-label{ width:auto; } }
+
+  #lock-screen{ display:none; position:fixed; inset:0; z-index:999; background:var(--bg); align-items:center; justify-content:center; padding:20px; }
+  body.locked #lock-screen{ display:flex; }
+  body.locked #shell, body.locked #bottom-nav{ display:none !important; }
+  .lock-card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:32px 28px; max-width:320px; width:100%; text-align:center; box-shadow:0 10px 30px rgba(0,0,0,.12); }
+  .lock-card img{ width:52px; height:52px; border-radius:12px; margin-bottom:12px; }
+  .lock-card h1{ font-size:19px; margin:0 0 4px; color:var(--text); }
+  .lock-card p{ font-size:13px; color:var(--text-muted); margin:0 0 18px; }
+  .lock-card input{ width:100%; padding:11px 12px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:15px; text-align:center; box-sizing:border-box; }
+  .lock-card button{ margin-top:12px; width:100%; padding:11px; border-radius:10px; border:none; background:var(--brand); color:#fff; font-size:15px; font-weight:700; cursor:pointer; }
+  .lock-err{ margin-top:10px; font-size:12.5px; color:var(--bad); }
 </style>
 
-<body>
+<body class="locked">
+  <div id="lock-screen">
+    <div class="lock-card">
+      <img src="icon-192.png" alt="SOL" />
+      <h1>SOL Financeiro</h1>
+      <p>Digite a senha para continuar</p>
+      <input id="lock-pass" type="password" placeholder="Senha" autocomplete="off" />
+      <button id="lock-btn">Entrar</button>
+      <div id="lock-err" class="lock-err" hidden>Senha incorreta. Tente de novo.</div>
+    </div>
+  </div>
+
   <div id="shell">
     <aside id="sidebar">
       <div class="brand-row">
@@ -1014,8 +1036,9 @@
 
       var recentes = state.entradas.map(function(e){ return Object.assign({tipo:'entrada'}, e); })
         .concat(state.saidas.map(function(s){ return Object.assign({tipo:'saida'}, s); }))
+        .filter(function(x){ return monthKeyOf(x.data)===key; })
         .sort(function(a,b){ return (b.data+b.criadoEm).localeCompare(a.data+a.criadoEm); })
-        .slice(0,6);
+        .slice(0,8);
 
       root.innerHTML =
         '<div class="view-header">' +
@@ -1043,7 +1066,7 @@
         '<div class="section-title">🕒 Últimos lançamentos</div>' +
         (recentes.length ?
           '<div class="row-list">' + recentes.map(function(r){ return txRowHtml(r, r.tipo); }).join('') + '</div>'
-          : '<div class="card empty-state pad"><div class="ic">🧾</div><p>Assim que você lançar uma entrada ou saída, ela aparece aqui.</p></div>'
+          : '<div class="card empty-state pad"><div class="ic">🧾</div><p>Nenhum lançamento neste mês ainda.</p></div>'
         );
 
       root.querySelectorAll('[data-att]').forEach(function(btn){
@@ -1622,7 +1645,38 @@
         console.error('Erro na sincronização em tempo real:', err);
       });
     }
-    init();
+
+    /* ---------- senha de acesso (proteção simples, sem contas de usuário) ---------- */
+    var APP_PASSWORD = 'SolSolucoes'; // troque aqui se quiser mudar a senha
+    var LOCK_KEY = 'solf_unlocked_v1';
+    function isUnlocked(){
+      try{ return localStorage.getItem(LOCK_KEY) === '1'; } catch(e){ return false; }
+    }
+    function showLock(){
+      var input = document.getElementById('lock-pass');
+      var btn = document.getElementById('lock-btn');
+      var err = document.getElementById('lock-err');
+      function tryUnlock(){
+        if(input.value === APP_PASSWORD){
+          try{ localStorage.setItem(LOCK_KEY, '1'); } catch(e){}
+          document.body.classList.remove('locked');
+          init();
+        } else {
+          err.hidden = false;
+          input.value = '';
+          input.focus();
+        }
+      }
+      btn.onclick = tryUnlock;
+      input.onkeydown = function(e){ if(e.key==='Enter') tryUnlock(); };
+      setTimeout(function(){ input.focus(); }, 150);
+    }
+    if(isUnlocked()){
+      document.body.classList.remove('locked');
+      init();
+    } else {
+      showLock();
+    }
 
   })();
   </script>
