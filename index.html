@@ -249,6 +249,8 @@
   .tx-del:hover{ color:var(--bad); background:var(--bad-bg); }
   .tx-att{ background:none; border:none; color:var(--text-muted); font-size:15px; padding:6px; border-radius:8px; flex-shrink:0; }
   .tx-att:hover{ color:var(--brand); background:var(--brand-soft); }
+  .tx-edit{ background:none; border:none; color:var(--text-muted); font-size:15px; padding:6px; border-radius:8px; flex-shrink:0; }
+  .tx-edit:hover{ color:var(--brand); background:var(--brand-soft); }
   .tx-tags{ display:flex; flex-wrap:wrap; gap:5px; margin-top:4px; }
   .tx-tag{ font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:20px; white-space:nowrap; }
   .tx-tag.cat-nota{ background:var(--brand-soft); color:var(--brand-deep); }
@@ -1013,6 +1015,7 @@
         '</div>' +
         '<div class="tx-value ' + (isIn?'in':'out') + ' num">' + (isIn?'+ ':'– ') + fmtMoney(tx.valor) + '</div>' +
         (tx.comprovanteId ? '<button class="tx-att" data-att="'+esc(tx.comprovanteId)+'" title="Ver comprovante">📎</button>' : '') +
+        '<button class="tx-edit" data-edit="'+tx.id+'" data-tipo="'+tipo+'" title="Editar">✏️</button>' +
         '<button class="tx-del" data-del="'+tx.id+'" data-tipo="'+tipo+'" title="Excluir">✕</button>' +
       '</div>';
     }
@@ -1079,6 +1082,14 @@
       document.getElementById('export-accounting').onclick = function(){ downloadAccountingReport(key); };
       root.querySelectorAll('[data-del]').forEach(function(btn){
         btn.onclick = function(){ deleteLancamento(btn.dataset.tipo==='entrada'?'entrada':'saida', btn.dataset.del); };
+      });
+      root.querySelectorAll('[data-edit]').forEach(function(btn){
+        btn.onclick = function(){
+          var tp = btn.dataset.tipo==='entrada'?'entrada':'saida';
+          var arr = tp==='entrada' ? state.entradas : state.saidas;
+          var item = arr.find(function(x){ return x.id===btn.dataset.edit; });
+          if(item) openLancamentoForm(tp, item);
+        };
       });
     }
 
@@ -1274,6 +1285,12 @@
       wrap.querySelectorAll('[data-att]').forEach(function(btn){
         btn.onclick = function(){ viewComprovante(btn.dataset.att); };
       });
+      wrap.querySelectorAll('[data-edit]').forEach(function(btn){
+        btn.onclick = function(){
+          var item = arr.find(function(x){ return x.id===btn.dataset.edit; });
+          if(item) openLancamentoForm(tipo, item);
+        };
+      });
     }
 
     /* ---------- view: condominios ---------- */
@@ -1385,6 +1402,14 @@
       });
       root.querySelectorAll('[data-att]').forEach(function(btn){
         btn.onclick = function(){ viewComprovante(btn.dataset.att); };
+      });
+      root.querySelectorAll('[data-edit]').forEach(function(btn){
+        btn.onclick = function(){
+          var tp = btn.dataset.tipo==='entrada'?'entrada':'saida';
+          var arr = tp==='entrada' ? state.entradas : state.saidas;
+          var item = arr.find(function(x){ return x.id===btn.dataset.edit; });
+          if(item) openLancamentoForm(tp, item);
+        };
       });
     }
 
