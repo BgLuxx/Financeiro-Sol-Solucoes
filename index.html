@@ -1079,7 +1079,7 @@
       document.getElementById('resumo-month').innerHTML = monthSwitcher(key);
       wireMonthSwitch(document.getElementById('resumo-month'), key, function(v){ filters.resumoMonth = v; });
       document.getElementById('export-month').onclick = function(){ copyMonthBackup(key); };
-      document.getElementById('export-accounting').onclick = function(){ downloadAccountingReport(key); };
+      document.getElementById('export-accounting').onclick = function(){ openAccountingReportChoice(key); };
       root.querySelectorAll('[data-del]').forEach(function(btn){
         btn.onclick = function(){ deleteLancamento(btn.dataset.tipo==='entrada'?'entrada':'saida', btn.dataset.del); };
       });
@@ -1649,62 +1649,72 @@
       }).join('') + '</tr>';
     }
 
-    function buildAccountingReportXls(monthKey){
+    var XLS_TITULO_MODO = {completo:'Relatório Contábil', entradas:'Relatório de Entradas', saidas:'Relatório de Saídas'};
+    function buildAccountingReportXls(monthKey, mode){
+      mode = mode || 'completo';
+      var showIn = mode==='completo' || mode==='entradas';
+      var showOut = mode==='completo' || mode==='saidas';
       var html = '';
-      html += xlsTitleRow('SOL Soluções - Relatório Contábil - ' + monthLabel(monthKey));
+      html += xlsTitleRow('SOL Soluções - ' + XLS_TITULO_MODO[mode] + ' - ' + monthLabel(monthKey));
       html += xlsSpacerRow();
 
-      var entradasDoMes = state.entradas.filter(function(e){ return monthKeyOf(e.data)===monthKey; })
-        .sort(function(a,b){ return a.data.localeCompare(b.data); });
-      html += xlsSectionHeader('NOTAS FISCAIS EMITIDAS (ENTRADAS)', 6);
-      html += xlsColHeaderRow(['Condomínio','Nº Nota','Valor Bruto','Valor Recebido (líquido)','Data','Observação']);
-      var totBrutoIn = 0, totLiqIn = 0;
-      entradasDoMes.forEach(function(e){
-        totBrutoIn += (e.valorBruto||e.valor); totLiqIn += e.valor;
-        html += xlsDataRow([condoName(e.condominioId), e.numeroNota||'', fmtMoney(e.valorBruto||e.valor), fmtMoney(e.valor), fmtDateFull(e.data), e.obs||''], [2,3]);
-      });
-      if(!entradasDoMes.length) html += xlsEmptyRow('(nenhuma entrada neste mês)', 6);
-      html += xlsTotalRow(['Total', '', fmtMoney(totBrutoIn), fmtMoney(totLiqIn), '', ''], [2,3]);
-      html += xlsSpacerRow();
+      var totBrutoIn = 0, totLiqIn = 0, totalPagoGeral = 0;
 
-      var saidasDoMes = state.saidas.filter(function(s){ return monthKeyOf(s.data)===monthKey; });
-      var categorias = [
-        {key:'nota', titulo:'SAÍDAS COM NOTA FISCAL', span:7,
-          cols:['Empresa/Fornecedor','Nº Nota','Condomínio','Valor Bruto','Valor Pago (líquido)','Data','Observação']},
-        {key:'imposto', titulo:'IMPOSTOS', span:5,
-          cols:['Empresa/Descrição','Condomínio','Valor','Data','Observação']},
-        {key:'funcionario', titulo:'FUNCIONÁRIOS', span:5,
-          cols:['Nome/Descrição','Condomínio','Valor','Data','Observação']},
-        {key:'semnota', titulo:'SEM NOTA FISCAL', span:5,
-          cols:['Empresa/Descrição','Condomínio','Valor','Data','Observação']}
-      ];
-      var totalPagoGeral = 0;
-      categorias.forEach(function(cat){
-        var itens = saidasDoMes.filter(function(s){ return (s.categoria||'semnota')===cat.key; })
+      if(showIn){
+        var entradasDoMes = state.entradas.filter(function(e){ return monthKeyOf(e.data)===monthKey; })
           .sort(function(a,b){ return a.data.localeCompare(b.data); });
-        html += xlsSectionHeader(cat.titulo, cat.span);
-        html += xlsColHeaderRow(cat.cols);
-        var totCat = 0, totBrutoCat = 0;
-        itens.forEach(function(s){
-          totCat += s.valor; totalPagoGeral += s.valor;
-          if(cat.key==='nota'){
-            totBrutoCat += (s.valorBruto||s.valor);
-            html += xlsDataRow([s.empresa||'', s.numeroNota||'', condoName(s.condominioId), fmtMoney(s.valorBruto||s.valor), fmtMoney(s.valor), fmtDateFull(s.data), s.obs||''], [3,4]);
-          } else {
-            html += xlsDataRow([s.empresa||'', condoName(s.condominioId), fmtMoney(s.valor), fmtDateFull(s.data), s.obs||''], [2]);
-          }
+        html += xlsSectionHeader('NOTAS FISCAIS EMITIDAS (ENTRADAS)', 6);
+        html += xlsColHeaderRow(['Condomínio','Nº Nota','Valor Bruto','Valor Recebido (líquido)','Data','Observação']);
+        entradasDoMes.forEach(function(e){
+          totBrutoIn += (e.valorBruto||e.valor); totLiqIn += e.valor;
+          html += xlsDataRow([condoName(e.condominioId), e.numeroNota||'', fmtMoney(e.valorBruto||e.valor), fmtMoney(e.valor), fmtDateFull(e.data), e.obs||''], [2,3]);
         });
-        if(!itens.length) html += xlsEmptyRow('(nenhum lançamento nesta categoria)', cat.span);
-        if(cat.key==='nota') html += xlsTotalRow(['Total', '', '', fmtMoney(totBrutoCat), fmtMoney(totCat), '', ''], [3,4]);
-        else html += xlsTotalRow(['Total', '', fmtMoney(totCat), '', ''], [2]);
+        if(!entradasDoMes.length) html += xlsEmptyRow('(nenhuma entrada neste mês)', 6);
+        html += xlsTotalRow(['Total', '', fmtMoney(totBrutoIn), fmtMoney(totLiqIn), '', ''], [2,3]);
         html += xlsSpacerRow();
-      });
+      }
+
+      if(showOut){
+        var saidasDoMes = state.saidas.filter(function(s){ return monthKeyOf(s.data)===monthKey; });
+        var categorias = [
+          {key:'nota', titulo:'SAÍDAS COM NOTA FISCAL', span:7,
+            cols:['Empresa/Fornecedor','Nº Nota','Condomínio','Valor Bruto','Valor Pago (líquido)','Data','Observação']},
+          {key:'imposto', titulo:'IMPOSTOS', span:5,
+            cols:['Empresa/Descrição','Condomínio','Valor','Data','Observação']},
+          {key:'funcionario', titulo:'FUNCIONÁRIOS', span:5,
+            cols:['Nome/Descrição','Condomínio','Valor','Data','Observação']},
+          {key:'semnota', titulo:'SEM NOTA FISCAL', span:5,
+            cols:['Empresa/Descrição','Condomínio','Valor','Data','Observação']}
+        ];
+        categorias.forEach(function(cat){
+          var itens = saidasDoMes.filter(function(s){ return (s.categoria||'semnota')===cat.key; })
+            .sort(function(a,b){ return a.data.localeCompare(b.data); });
+          html += xlsSectionHeader(cat.titulo, cat.span);
+          html += xlsColHeaderRow(cat.cols);
+          var totCat = 0, totBrutoCat = 0;
+          itens.forEach(function(s){
+            totCat += s.valor; totalPagoGeral += s.valor;
+            if(cat.key==='nota'){
+              totBrutoCat += (s.valorBruto||s.valor);
+              html += xlsDataRow([s.empresa||'', s.numeroNota||'', condoName(s.condominioId), fmtMoney(s.valorBruto||s.valor), fmtMoney(s.valor), fmtDateFull(s.data), s.obs||''], [3,4]);
+            } else {
+              html += xlsDataRow([s.empresa||'', condoName(s.condominioId), fmtMoney(s.valor), fmtDateFull(s.data), s.obs||''], [2]);
+            }
+          });
+          if(!itens.length) html += xlsEmptyRow('(nenhum lançamento nesta categoria)', cat.span);
+          if(cat.key==='nota') html += xlsTotalRow(['Total', '', '', fmtMoney(totBrutoCat), fmtMoney(totCat), '', ''], [3,4]);
+          else html += xlsTotalRow(['Total', '', fmtMoney(totCat), '', ''], [2]);
+          html += xlsSpacerRow();
+        });
+      }
 
       html += xlsSectionHeader('RESUMO GERAL', 2);
-      html += xlsDataRow(['Total recebido (líquido)', fmtMoney(totLiqIn)], [1]);
-      html += xlsDataRow(['Total pago (líquido, todas categorias)', fmtMoney(totalPagoGeral)], [1]);
-      var saldoMes = totLiqIn-totalPagoGeral;
-      html += xlsTotalRow(['Saldo do mês', fmtMoney(saldoMes)], [1]);
+      if(showIn) html += xlsDataRow(['Total recebido (líquido)', fmtMoney(totLiqIn)], [1]);
+      if(showOut) html += xlsDataRow(['Total pago (líquido, todas categorias)', fmtMoney(totalPagoGeral)], [1]);
+      if(showIn && showOut){
+        var saldoMes = totLiqIn-totalPagoGeral;
+        html += xlsTotalRow(['Saldo do mês', fmtMoney(saldoMes)], [1]);
+      }
 
       return '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">' +
         '<head><meta charset="UTF-8">' +
@@ -1713,15 +1723,36 @@
         '</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->' +
         '</head><body><table border="2" cellspacing="0" cellpadding="0" bordercolor="#000000">' + xlsColgroup() + html + '</table></body></html>';
     }
-    function downloadAccountingReport(monthKey){
-      var html = buildAccountingReportXls(monthKey);
+    var XLS_SUFIXO_MODO = {completo:'Contabil', entradas:'Entradas', saidas:'Saidas'};
+    var XLS_TOAST_MODO = {completo:'Relatório contábil completo', entradas:'Relatório de entradas', saidas:'Relatório de saídas'};
+    function downloadAccountingReport(monthKey, mode){
+      mode = mode || 'completo';
+      var html = buildAccountingReportXls(monthKey, mode);
       var blob = new Blob(['﻿' + html], {type:'application/vnd.ms-excel'});
       var url = URL.createObjectURL(blob);
       var a = document.createElement('a');
-      a.href = url; a.download = 'SOL-Relatorio-Contabil-' + monthKey + '.xls';
+      a.href = url; a.download = 'SOL-Relatorio-' + XLS_SUFIXO_MODO[mode] + '-' + monthKey + '.xls';
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       setTimeout(function(){ URL.revokeObjectURL(url); }, 2000);
-      showToast('Relatório contábil de ' + monthLabel(monthKey) + ' baixado.');
+      showToast(XLS_TOAST_MODO[mode] + ' de ' + monthLabel(monthKey) + ' baixado.');
+    }
+    function openAccountingReportChoice(monthKey){
+      openModalHtml(
+        '<h3>Relatório contábil</h3>' +
+        '<p class="modal-sub">O que você quer baixar de ' + esc(monthLabel(monthKey)) + '?</p>' +
+        '<div style="display:flex;flex-direction:column;gap:8px;">' +
+          '<button class="btn btn-primary" id="rc-completo" style="width:100%;">📑 Relatório completo (entradas e saídas)</button>' +
+          '<button class="btn btn-ghost" id="rc-entradas" style="width:100%;">⬆️ Só entradas</button>' +
+          '<button class="btn btn-ghost" id="rc-saidas" style="width:100%;">⬇️ Só saídas</button>' +
+        '</div>' +
+        '<div class="modal-actions">' +
+          '<button class="btn btn-ghost" id="rc-cancel">Cancelar</button>' +
+        '</div>'
+      );
+      document.getElementById('rc-cancel').onclick = closeModal;
+      document.getElementById('rc-completo').onclick = function(){ closeModal(); downloadAccountingReport(monthKey, 'completo'); };
+      document.getElementById('rc-entradas').onclick = function(){ closeModal(); downloadAccountingReport(monthKey, 'entradas'); };
+      document.getElementById('rc-saidas').onclick = function(){ closeModal(); downloadAccountingReport(monthKey, 'saidas'); };
     }
 
     /* ---------- init ---------- */
